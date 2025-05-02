@@ -1,5 +1,4 @@
 import javafx.application.Application;
-import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -8,12 +7,12 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
-import javafx.scene.layout.HBox;
+
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
+
 
 
 
@@ -41,9 +40,7 @@ public class data extends Application {
         double maxEdgeLength = 100;
         double connectProbability = 0.2;
         Graph graph = new Graph();
-        long duration = measureTime(() -> {
-            graph.generateConnectedGraph(N,maxEdgeLength, connectProbability,maxCoordinateValue);
-        });
+        long duration = measureTime(() -> graph.generateConnectedGraph(N,maxEdgeLength, connectProbability,maxCoordinateValue));
         System.out.println("图生成耗时: " + duration + " ns");
 
 
@@ -57,8 +54,6 @@ public class data extends Application {
         }
 
         Canvas canvas = new Canvas(1800, 1000);
-//        primaryStage.setWidth(1550);
-//        primaryStage.setHeight(1100);
         GraphicsContext gc = canvas.getGraphicsContext2D();
         gc.setLineWidth(2);
 
@@ -93,7 +88,7 @@ public class data extends Application {
                 double y = Double.parseDouble(yInput.getText());
 //                int id = Integer.parseInt(pointInput.getText());
                 // 查找最近100个顶点
-                nearestVertices.set(graph.findNearestVertices(x,y, 100));
+                nearestVertices.set(graph.findNearestVertices(x,y, 100, graph.parts));
                 relatedEdges.set(graph.getRelatedEdges(nearestVertices.get()));
 
                 // 重新绘制地图
@@ -150,29 +145,27 @@ public class data extends Application {
 
 
         pathOptions1.setOnAction(e -> {
+            // 只重绘地图，不显示路径
             if (pathOptions1.getValue().equals("显示最优路径")) {
                 judgebest.set(1);
-                System.out.println(pathOptions1.getValue());
-                redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
 
             } else {
                 judgebest.set(0);
-                System.out.println(pathOptions1.getValue());
-                redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get()); // 只重绘地图，不显示路径
             }
+            System.out.println(pathOptions1.getValue());
+            redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
         });
 
         pathOptions2.setOnAction(e -> {
+            // 只重绘地图，不显示路径
             if (pathOptions2.getValue().equals("显示最短路径")) {
                 judgeshortest.set(1);
-                System.out.println(pathOptions2.getValue());
-                redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
 
             } else {
                 judgeshortest.set(0);
-                System.out.println(pathOptions2.getValue());
-                redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get()); // 只重绘地图，不显示路径
             }
+            System.out.println(pathOptions2.getValue());
+            redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
         });
 
         // 绘制地图
@@ -188,10 +181,8 @@ public class data extends Application {
         int cars_num=200000;
         TrafficSimulation trafficSimulation = new TrafficSimulation(graph, simulationTime, timeStep,cars_num);
 
-        duration = measureTime(() -> {
-            // 要测量的函数/代码块
-            trafficSimulation.startSimulation();
-        });
+        // 要测量的函数/代码块
+        duration = measureTime(trafficSimulation::startSimulation);
         System.out.println("生成模拟车流耗时: " + duration + " ns");
 
         // 鼠标事件
@@ -371,22 +362,18 @@ public class data extends Application {
     private void displayNearVertex(GraphicsContext gc, List<Vertex> highlightVertices, List<Edge> highlightEdges) {
         // 高亮最近的100个顶点
         gc.setFill(Color.BLUE);
-        highlightVertices.forEach(vertex -> {
-            gc.fillOval(
-                    (vertex.x + translateX) * scaleFactor - scaleFactor,
-                    (vertex.y + translateY) * scaleFactor - scaleFactor,
-                    3*scaleFactor, 3*scaleFactor
-            );
-        });
+        highlightVertices.forEach(vertex -> gc.fillOval(
+                (vertex.x + translateX) * scaleFactor - scaleFactor,
+                (vertex.y + translateY) * scaleFactor - scaleFactor,
+                2*scaleFactor, 2*scaleFactor
+        ));
 
         // 高亮相关的边
         gc.setStroke(Color.ORANGE);
-        highlightEdges.forEach(edge -> {
-            gc.strokeLine(
-                    (edge.start.x + translateX) * scaleFactor, (edge.start.y + translateY) * scaleFactor,
-                    (edge.end.x + translateX) * scaleFactor, (edge.end.y + translateY) * scaleFactor
-            );
-        });
+        highlightEdges.forEach(edge -> gc.strokeLine(
+                (edge.start.x + translateX) * scaleFactor, (edge.start.y + translateY) * scaleFactor,
+                (edge.end.x + translateX) * scaleFactor, (edge.end.y + translateY) * scaleFactor
+        ));
         // System.out.println(highlightEdges);
     }
 

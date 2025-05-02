@@ -9,7 +9,7 @@ class Car {
         this.destinationVertex = null;
         this.travelTime = 0;
         setRandomDestination(currentVertex);
-        Edge currentEdge = graph.findEdge(currentVertex, destinationVertex);
+        Edge currentEdge = graph.findEdge(currentVertex, destinationVertex,0);
         currentEdge.updateTraffic(+1);
         travelTime=currentEdge.getTrafficTime();
     }
@@ -33,10 +33,10 @@ class Car {
         setRandomDestination(currentVertex);
 
         // 正确查找原路径的边（车辆刚刚离开的边）
-        Edge lastEdge = graph.findEdge(originalStart, originalDestination);
+        Edge lastEdge = graph.findEdge(originalStart, originalDestination,0);
 
         // 查找新路径的边（车辆即将进入的边）
-        Edge currentEdge = graph.findEdge(currentVertex, destinationVertex);
+        Edge currentEdge = graph.findEdge(currentVertex, destinationVertex,0);
 
         // 更新交通量
         if (lastEdge != null) {
@@ -127,9 +127,7 @@ class  TrafficSimulation {
         new Thread(()->{
             while (currentTime < simulationTime) {
                 currentTime += timeStep;
-                long duration = data.measureTime(() -> {
-                    updateSimulation();
-                });
+                long duration = data.measureTime(this::updateSimulation);
                 System.out.println("本次车流更新后有 " +timeSlotsQueue.size()  + " 个timeslot");
                 System.out.println("本次车流更新耗时: " + duration + " ns");
 

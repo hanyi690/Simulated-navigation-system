@@ -8,6 +8,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
+import java.io.*;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -18,20 +19,22 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class data extends Application {
 
-    private double scaleFactor = 4.0;
+    protected static double scaleFactor = 4.0;
     private static final double SCALE_SPEED = 0.05;
     private static final double MIN_SCALE = 1;
     private static final double MAX_SCALE = 5.0;
-
-    private double translateX = 0, translateY = 0;  // 用于平移地图的位置
+    protected static Canvas canvas = new Canvas(1800, 1000);
+    protected static GraphicsContext gc = canvas.getGraphicsContext2D();
+    private static double translateX = 0, translateY = 0;  // 用于平移地图的位置
     private double mousePressedX, mousePressedY;
+    protected static int printrank;
+    protected static volatile AtomicInteger judgeshortest = new AtomicInteger(1);
+    protected static volatile AtomicInteger judgebest = new AtomicInteger(1);
 
-    AtomicInteger judgeshortest = new AtomicInteger(1);
-    AtomicInteger judgebest = new AtomicInteger(1);
-
-    AtomicReference<List<Vertex>> nearestVertices = new AtomicReference<>(new ArrayList<>());
-    AtomicReference<List<Edge>> relatedEdges = new AtomicReference<>(new ArrayList<>());
-
+    protected static  volatile AtomicReference<List<Vertex>> nearestVertices=new AtomicReference<>(new ArrayList<>());
+    protected static volatile AtomicReference<List<Edge>> relatedEdges=new AtomicReference<>(new ArrayList<>()) ;
+    protected static volatile AtomicReference<Vertex> source;
+    protected static volatile AtomicReference<Vertex> destination;
     @Override
     public void start(Stage primaryStage) {
 
@@ -39,10 +42,9 @@ public class data extends Application {
         double maxCoordinateValue = 1000;
         double maxEdgeLength = 100;
         double connectProbability = 0.2;
+        long duration;//计时器
         Graph graph = new Graph();
-        long duration = measureTime(() -> graph.generateConnectedGraph(N,maxEdgeLength, connectProbability,maxCoordinateValue));
-        System.out.println("图生成耗时: " + duration + " ns");
-
+        File(graph,N,maxCoordinateValue,maxEdgeLength,connectProbability);
 
         if (graph.getVertices().isEmpty()) {
             System.err.println("Error: Graph has no vertices.");
@@ -52,9 +54,9 @@ public class data extends Application {
             System.err.println("Error: Not enough vertices in the graph.");
             return;
         }
-
-        Canvas canvas = new Canvas(1800, 1000);
-        GraphicsContext gc = canvas.getGraphicsContext2D();
+        //起点终点初始化
+        source=new AtomicReference<>(graph.vertices.get(0));
+        destination=new AtomicReference<>(graph.vertices.get(1));
         gc.setLineWidth(2);
 
         //如果 graph.getVertices() 为空或 size() < 2，这会导致 IndexOutOfBoundsException，但也可能在某些情况下变成 NullPointerException。
@@ -71,8 +73,7 @@ public class data extends Application {
         TextField startPoint = new TextField("0");
         TextField endPoint = new TextField("1");
         TextField pointInput = new TextField();
-        AtomicReference<Vertex> source = new AtomicReference<>(graph.getVertices().get(getTextFieldPointID(startPoint)));
-        AtomicReference<Vertex> destination = new AtomicReference<>(graph.getVertices().get(getTextFieldPointID(endPoint)));
+
 
         Button searchButton = new Button("查找最近100个顶点");
 //        toolBar.getItems().addAll(new Label("pointID:"), pointInput, searchButton);
@@ -95,7 +96,7 @@ public class data extends Application {
                 scaleFactor = 5;
                 translateX = 180-x;
                 translateY = 100-y;
-                redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
+                redraw(graph);
 
             } catch (NumberFormatException ex) {
                 System.out.println("请输入有效的数字");
@@ -130,17 +131,19 @@ public class data extends Application {
         // 添加事件处理
         zoomInButton.setOnAction(e -> {
             scaleFactor = Math.min(MAX_SCALE, scaleFactor + SCALE_SPEED);
-            redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
+            redraw( graph);
         });
         zoomOutButton.setOnAction(e -> {
             scaleFactor = Math.max(MIN_SCALE, scaleFactor - SCALE_SPEED);
-            redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
+            redraw( graph);
         });
         resetViewButton.setOnAction(e -> {
             scaleFactor = 4.0;
             translateX = 0;
             translateY = 0;
-            redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
+            nearestVertices.set(new ArrayList<>());
+            relatedEdges.set(new ArrayList<>());
+            redraw( graph);
         });
 
 
@@ -153,7 +156,8 @@ public class data extends Application {
                 judgebest.set(0);
             }
             System.out.println(pathOptions1.getValue());
-            redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
+
+            redraw( graph);
         });
 
         pathOptions2.setOnAction(e -> {
@@ -165,25 +169,23 @@ public class data extends Application {
                 judgeshortest.set(0);
             }
             System.out.println(pathOptions2.getValue());
-            redraw(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
+            redraw( graph);
         });
+        double simulationTime=10000000;
+        double timeStep=1;
+        int cars_num=200000;
+        TrafficSimulation trafficSimulation = new TrafficSimulation(graph, simulationTime, timeStep,cars_num);
+        // 要测量的函数/代码块
+        duration = measureTime(trafficSimulation::startSimulation);
+        System.out.println("生成模拟车流耗时: " + duration + " ns");
 
         // 绘制地图
         duration = measureTime(() -> {
             // 要测量的函数/代码块
-            drawMap(scaleFactor,gc, graph, source.get(), destination.get(), judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
+            drawMap( graph);
         });
         System.out.println("图像绘制耗时: " + duration + " ns");
 
-
-        double simulationTime=100000;
-        double timeStep=1;
-        int cars_num=200000;
-        TrafficSimulation trafficSimulation = new TrafficSimulation(graph, simulationTime, timeStep,cars_num);
-
-        // 要测量的函数/代码块
-        duration = measureTime(trafficSimulation::startSimulation);
-        System.out.println("生成模拟车流耗时: " + duration + " ns");
 
         // 鼠标事件
         canvas.setOnMousePressed(event -> {
@@ -224,7 +226,7 @@ public class data extends Application {
 
             // 重绘地图
             gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
-            drawMap(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
+            drawMap( graph);
             //displayShortestPath(gc, graph, source, destination);
         });
 
@@ -236,7 +238,7 @@ public class data extends Application {
 
             gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
 
-            drawMap(scaleFactor,gc, graph, source.get(), destination.get(),judgebest, judgeshortest, nearestVertices.get(), relatedEdges.get());
+            drawMap( graph);
             //displayShortestPath(gc, graph, source, destination);
         });
 
@@ -291,15 +293,14 @@ public class data extends Application {
 
     }
 
-    private void redraw(double scaleFactor,GraphicsContext gc, Graph graph, Vertex source, Vertex destination,AtomicInteger judgeBest, AtomicInteger judgeshortest, List<Vertex> highlightVertices, List<Edge> highlightEdges) {
+    public static void redraw(Graph graph) {
         gc.clearRect(0, 0, gc.getCanvas().getWidth(), gc.getCanvas().getHeight());
-        drawMap(scaleFactor,gc, graph, source, destination,  judgeBest,judgeshortest, highlightVertices, highlightEdges);
+        drawMap(graph);
         // System.out.println(highlightEdges);
 
     }
 
-    int printrank;
-    private void drawMap(double scaleFactor,GraphicsContext gc, Graph graph, Vertex source, Vertex destination,AtomicInteger judgeBest, AtomicInteger judgeshortest, List<Vertex> highlightVertices, List<Edge> highlightEdges) {
+    private static void drawMap(Graph graph) {
 
 //        if(scaleFactor>=3.5&&scaleFactor<=5)printrank=0;
 //        else if(scaleFactor>=1&&scaleFactor<=2)printrank=2;
@@ -345,21 +346,24 @@ public class data extends Application {
 
             });
 
-        if (judgeBest.get() == 1) {
-            displayBestPath(gc, graph, source, destination);
+        if (judgebest.get() == 1) {
+            displayBestPath(gc, graph, source.get(), destination.get());
             //System.out.println(judgeshortest.get());
         }
 
         if (judgeshortest.get() == 1) {
-            displayShortestPath(gc, graph, source, destination);
+            displayShortestPath(gc, graph, source.get(), destination.get());
             //System.out.println(judgeshortest.get());
         }
-        displayNearVertex(gc,  highlightVertices, highlightEdges);
+
+        displayNearVertex(gc, nearestVertices.get(), relatedEdges.get());
     }
 
 
     //展示最近一百个点
-    private void displayNearVertex(GraphicsContext gc, List<Vertex> highlightVertices, List<Edge> highlightEdges) {
+    private static void displayNearVertex(GraphicsContext gc, List<Vertex> highlightVertices, List<Edge> highlightEdges) {
+        if(highlightVertices.isEmpty()|| highlightEdges.isEmpty())
+            return;
         // 高亮最近的100个顶点
         gc.setFill(Color.BLUE);
         highlightVertices.forEach(vertex -> gc.fillOval(
@@ -377,7 +381,7 @@ public class data extends Application {
         // System.out.println(highlightEdges);
     }
 
-    private Color getEdgeColor(Edge edge) {
+    private static Color getEdgeColor(Edge edge) {
         if(edge.v==0) return Color.GRAY;//缩略线
         if (edge.n<0.6*edge.v) {
             return Color.GREEN; // 轻度拥堵
@@ -387,8 +391,6 @@ public class data extends Application {
             return Color.RED; // 高度拥堵
         }
     }
-
-
 
     // TODO: 2025/3/20  展示最优路径，要结合车流量和最短路径综合考虑
 
@@ -400,7 +402,7 @@ public class data extends Application {
     // 计算并显示最短路径
 
 
-    private void displayBestPath(GraphicsContext gc, Graph graph, Vertex source, Vertex destination) {
+    private static void displayBestPath(GraphicsContext gc, Graph graph, Vertex source, Vertex destination) {
 
         List<Vertex> path = graph.calculateBestPath(source, destination);
 
@@ -414,7 +416,7 @@ public class data extends Application {
 
         }
     }
-    private void displayShortestPath(GraphicsContext gc, Graph graph, Vertex source, Vertex destination) {
+    private static void displayShortestPath(GraphicsContext gc, Graph graph, Vertex source, Vertex destination) {
 
         List<Vertex> path = graph.calculateShortestPath(source, destination);
 
@@ -428,6 +430,120 @@ public class data extends Application {
 
         }
 
+    }
+    private static void File(Graph graph,int N,double maxCoordinateValue,double maxEdgeLength,double connectProbability) {
+        String filePath = System.getProperty("user.dir") + "\\location.txt";
+        File file = new File(filePath);
+        // 检查文件是否存在
+        if (!file.exists()) {
+            try {
+                // 如果文件不存在，则创建指定名称的新文件
+                if (file.createNewFile()) {
+                    System.out.println("文件已创建: " + file.getName());
+                } else {
+                    System.out.println("文件创建失败！");
+                }
+            } catch (IOException e) {
+                System.out.println("发生错误：" + e.getMessage());
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("文件已存在: " + file.getName());
+        }
+        //文件存在且为空，随机生成并写入
+        if (file.exists() && file.length() == 0) {
+            try {
+                BufferedWriter writer = new BufferedWriter(new FileWriter(file, true));
+                graph.generateConnectedGraph(N,maxEdgeLength, connectProbability,maxCoordinateValue);
+
+                //写入点
+                writer.write("Vertex:");
+                writer.newLine();
+                for (int i = 0; i < N; i++) {
+                    writer.write(i + " " +graph.vertices.get(i).x + " " +graph.vertices.get(i).y);
+                    writer.newLine();  // 写入换行符
+                }
+
+                //写入边
+                writer.write("Edge:");
+                writer.newLine();
+                Set<String> set = new HashSet<>();
+                //去重
+                for (Vertex v:graph.vertices) {
+                    for(Edge e:v.edges[0]) {
+                        set.add(e.start.id + " " + e.end.id+" "+e.v);
+                    }
+                }
+                for(String s:set) {
+                    writer.write(s);
+                    writer.newLine();
+                }
+
+                // 关闭 BufferedWriter
+                writer.close();
+            } catch (IOException e) {
+                e.fillInStackTrace();
+            }
+        } else {
+            //文件存在不为空开始读文件
+            try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+                graph.parts = new Partition(maxEdgeLength);
+                boolean isVertexSection = false;
+                boolean isEdgeSection = false;
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    if (line.startsWith("Vertex:")) {
+                        isVertexSection = true;  // 标记已开始解析顶点数据
+                        continue;
+                    }
+                    if (line.startsWith("Edge:")) {
+                        isVertexSection = false;  // 标记已开始解析顶点数据
+                        isEdgeSection = true;
+                        continue;
+                    }
+
+                    //读点
+                    if (isVertexSection && !line.isEmpty()) {
+                        String[] s = line.split("\\s+");
+                        if (s.length == 3) {
+                            try {
+                                int id = Integer.parseInt(s[0]);
+                                double x = Double.parseDouble(s[1]);
+                                double y = Double.parseDouble(s[2]);
+                                Vertex vertex = new Vertex(id, x, y);
+                                graph.parts.addVertex(vertex);
+                                graph.vertices.add(vertex);
+                            } catch (NumberFormatException e) {
+                                System.err.println("无效的顶点数据: " + line);
+                            }
+                        }
+                    }
+
+                    //读边
+                    if (isEdgeSection && !line.isEmpty()) {
+                        String[] s = line.split("\\s+");
+                        if (s.length == 3) {
+                            try {
+                                int startId = Integer.parseInt(s[0]);
+                                int endId = Integer.parseInt(s[1]);
+                                int container = Integer.parseInt(s[2]);
+                            } catch (NumberFormatException e) {
+                                System.err.println("无效的边数据: " + line);
+                            }
+                            Edge edge = new Edge(graph.vertices.get(Integer.parseInt(s[0])), graph.vertices.get(Integer.parseInt(s[1])), Integer.parseInt(s[2]));
+                            graph.parts.addEdge(edge);
+                            edge.start.edges[0].add(edge);
+                            edge.end.edges[0].add(edge);
+                        }
+                    }
+
+                }
+            } catch (IOException e) {
+                e.fillInStackTrace();
+            }
+            graph.generateRankedEdges(15,5);
+        }
     }
 
     public static long measureTime(Runnable task) {

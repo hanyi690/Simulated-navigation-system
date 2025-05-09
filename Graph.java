@@ -509,6 +509,7 @@ class Graph {
     public List<Edge> getEdges() {
         return vertices.stream()
                 .flatMap(v -> v.edges[0].stream())
+                .distinct()
                 .collect(Collectors.toList());
     }
 
@@ -547,7 +548,7 @@ class Graph {
                 uniqueVertices.add(edge.start);
                 uniqueVertices.add(edge.end);
             });
-            System.out.println("rankedge"+(level+1)+"包括点数"+uniqueVertices.size()+"应有点数"+vertexToGroupMap.size() );
+            System.out.println("rankedge"+(level+1)+"包括点数"+uniqueVertices.size() );
             // 3. 准备下一层输入（使用质心）
             currentVertices.clear();
             currentVertices = groups.stream()

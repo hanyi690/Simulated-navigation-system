@@ -1,3 +1,5 @@
+import javafx.application.Platform;
+
 import java.util.*;
 class Car {
     private Vertex currentVertex; // 当前所在点
@@ -130,6 +132,9 @@ class  TrafficSimulation {
                 long duration = data.measureTime(this::updateSimulation);
                 System.out.println("本次车流更新后有 " +timeSlotsQueue.size()  + " 个timeslot");
                 System.out.println("本次车流更新耗时: " + duration + " ns");
+                Platform.runLater(() -> {
+                        data. redraw( graph);
+                });
 
                 //模拟休眠一段时间来模拟现实时间流逝，休眠时间取决于时间步长和模拟速度
                 try {
